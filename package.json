@@ -1,0 +1,43 @@
+{
+  "name": "@basenames/cli",
+  "version": "0.1.0",
+  "description": "A CLI for managing Basenames on Base",
+  "module": "index.ts",
+  "type": "module",
+  "bin": {
+    "basenames": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npx tsup src/index.ts --format esm --dts --outDir dist",
+    "dev": "npx tsx src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "npx @biomejs/biome lint --write src",
+    "format": "npx @biomejs/biome format --write src"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "tsup": "^8.5.1",
+    "tsx": "^4.20.6"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "cmd-ts": "^0.13.0",
+    "viem": "^2.33.3",
+    "yocto-spinner": "^1.0.0",
+    "yoctocolors": "^2.1.1"
+  },
+  "keywords": [
+    "basenames",
+    "ens",
+    "base",
+    "ethereum",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT"
+}
