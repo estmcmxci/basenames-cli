@@ -318,21 +318,6 @@ basenames edit contenthash myname ipfs://QmRAQB6Y...
 | RegistrarController | `0x4cCb0BB02FCABA27e82a56646E81d8c5bC4119a5` |
 | BaseRegistrar | `0x03c4738Ee98aE44591e1A4A4F3CaB6641d95DD9a` |
 
-## Known Issues & Limitations
-
-### ENSNode Indexing Gap
-
-The `list` command relies entirely on ENSNode's indexed data. Some basenames may not appear in the list if they haven't been indexed yet by ENSNode, even though they exist on-chain and are fully functional.
-
-**What this means:**
-- Names that aren't indexed won't appear in `basenames list <address>`
-- You can still query individual names using `basenames profile <name>` or `basenames resolve <name>`
-- All other commands work normally (they use direct on-chain queries)
-
-**Status:** This indexing gap has been communicated to the ENSNode team. The issue affects a subset of basenames and appears to be related to how ENSNode processes registration events from certain contracts or during specific time periods.
-
-**Workaround:** Use `basenames profile <name>` to query individual names that don't appear in the list.
-
 ## License
 
 MIT
