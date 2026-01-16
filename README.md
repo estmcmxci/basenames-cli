@@ -95,8 +95,6 @@ export BASENAMES_PRIVATE_KEY="0x..."
 # Network-specific RPC URLs (recommended)
 export BASE_RPC_URL_BASE="https://base.drpc.org"
 ```
-<<<<<<< HEAD
-=======
 
 **Priority order for RPC URLs:**
 1. Network-specific URL (`BASE_RPC_URL_BASE` or `BASE_RPC_URL_BASESEPOLIA`)
@@ -395,4 +393,3 @@ The `list` command relies entirely on ENSNode's indexed data. Some basenames may
 ## License
 
 MIT
->>>>>>> 0cad031 (Add `name` command for naming smart contracts on Base)
