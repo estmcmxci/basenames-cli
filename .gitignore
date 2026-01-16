@@ -4,6 +4,8 @@ bun.lockb
 
 # Build output
 dist/
+out/
+cache/
 
 # Environment
 .env
@@ -26,4 +28,8 @@ npm-debug.log*
 
 # Coverage
 coverage/
+
+# Foundry compilation output
+scripts/.forge-out/
+
 

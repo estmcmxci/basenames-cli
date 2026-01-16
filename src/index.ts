@@ -1,10 +1,10 @@
 #!/usr/bin/env -S node --no-deprecation
 /**
  * Basenames CLI
- * 
+ *
  * A CLI for managing Basenames on Base Sepolia and Base Mainnet.
  * Based on the Atlas CLI architecture with ENSNode integration.
- * 
+ *
  * Usage:
  *   basenames resolve <name|address>
  *   basenames profile <name|address>
@@ -12,6 +12,7 @@
  *   basenames register <name> --owner <address>
  *   basenames list <address>
  *   basenames verify <name>
+ *   basenames name <contract-address> <name>  [NEW] Name a smart contract
  *   basenames edit txt <name> <key> <value>
  *   basenames edit address <name> <address>
  *   basenames edit primary <name>
@@ -48,7 +49,9 @@ import {
   getLabelHash,
   getResolverAddress,
   getDeployments,
+  nameContract as nameContractCmd,
 } from "./commands";
+import { stopSpinner } from "./utils/spinner";
 
 // =============================================================================
 // Read Commands
@@ -262,6 +265,62 @@ const verify = command({
       return;
     }
     await verifyCmd({ name: args.name, network: args.network });
+  },
+});
+
+const name = command({
+  name: "name",
+  description: "Assign an ENS name to a smart contract",
+  args: {
+    contractAddress: positional({
+      type: string,
+      displayName: "contract-address",
+      description: "Contract address to name",
+    }),
+    nameArg: positional({
+      type: string,
+      displayName: "name",
+      description: "Name label (without parent domain)",
+    }),
+    parent: option({
+      type: optional(string),
+      long: "parent",
+      short: "p",
+      description: "Parent domain (defaults to network parent domain)",
+    }),
+    noReverse: flag({
+      long: "no-reverse",
+      description: "Skip reverse resolution",
+    }),
+    checkCompatibility: flag({
+      long: "check-compatibility",
+      description: "Check if contract supports reverse resolution",
+    }),
+    network: option({
+      type: optional(string),
+      long: "network",
+      short: "n",
+      description: "Network to use (baseSepolia, base)",
+    }),
+  },
+  handler: async (args) => {
+    if (!args.contractAddress || !args.nameArg) {
+      console.log("Usage: basenames name <contract-address> <name> [options]");
+      console.log("\nOptions:");
+      console.log("  --parent, -p            Parent domain (defaults to basetest.eth)");
+      console.log("  --no-reverse            Skip reverse resolution");
+      console.log("  --check-compatibility   Check contract compatibility");
+      console.log("  --network, -n           Network (baseSepolia, base)");
+      return;
+    }
+    await nameContractCmd({
+      contractAddress: args.contractAddress,
+      name: args.nameArg,
+      parent: args.parent,
+      noReverse: args.noReverse,
+      checkCompatibility: args.checkCompatibility,
+      network: args.network,
+    });
   },
 });
 
@@ -504,6 +563,7 @@ const cli = subcommands({
     // Write commands
     register,
     verify,
+    name,
     edit,
     // Utility commands
     namehash,
@@ -524,22 +584,36 @@ async function main() {
     process.argv.includes("-h") ||
     process.argv.length === 2; // Just "basenames" with no subcommand
 
-  // Intercept process.exit to handle help requests cleanly
-  const originalExit = process.exit;
-  process.exit = ((code?: number) => {
-    // If it's a help request and exit code is 1, change to 0
-    if (isHelpRequest && code === 1) {
-      return originalExit(0);
+  // Cleanup function to ensure spinner is stopped before exit
+  const cleanup = () => {
+    try {
+      stopSpinner();
+    } catch {
+      // Ignore errors during cleanup
     }
-    return originalExit(code);
-  }) as typeof process.exit;
+  };
+
+  // Ensure cleanup on exit
+  process.on("exit", cleanup);
+  process.on("SIGINT", () => {
+    cleanup();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    cleanup();
+    process.exit(0);
+  });
 
   try {
     await run(binary(cli), process.argv);
+    // Explicitly exit with success code on successful completion
+    cleanup();
+    process.exit(0);
   } catch (error) {
     const e = error as Error;
+    cleanup();
     // cmd-ts may throw when showing help - treat as success
-    if (isHelpRequest || e.message.includes("subcommand")) {
+    if (isHelpRequest || e.message.includes("subcommand") || e.message.includes("help")) {
       process.exit(0);
       return;
     }

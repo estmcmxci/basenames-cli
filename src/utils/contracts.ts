@@ -6,7 +6,7 @@
  */
 
 import type { Address } from "viem";
-import { encodeFunctionData } from "viem";
+import { encodeFunctionData, keccak256, encodePacked } from "viem";
 import { normalize } from "viem/ens";
 import { getNetworkConfig } from "../config/deployments";
 import { getPublicClient, getWalletClient } from "./viem";
@@ -30,6 +30,29 @@ export const REGISTRY_ABI = [
     stateMutability: "view",
     inputs: [{ name: "node", type: "bytes32" }],
     outputs: [{ type: "address" }],
+  },
+  {
+    name: "setSubnodeRecord",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "parentNode", type: "bytes32" },
+      { name: "labelHash", type: "bytes32" },
+      { name: "owner", type: "address" },
+      { name: "resolver", type: "address" },
+      { name: "ttl", type: "uint64" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "setOwner",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "owner", type: "address" },
+    ],
+    outputs: [],
   },
 ] as const;
 
@@ -85,6 +108,29 @@ export const RESOLVER_ABI = [
     stateMutability: "nonpayable",
     inputs: [{ name: "data", type: "bytes[]" }],
     outputs: [{ name: "results", type: "bytes[]" }],
+  },
+  // Overloaded setAddr with coin type for L2 chains (ENSIP-19)
+  {
+    name: "setAddr",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "coinType", type: "uint256" },
+      { name: "addr", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  // Overloaded addr read with coin type
+  {
+    name: "addr",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "coinType", type: "uint256" },
+    ],
+    outputs: [{ type: "bytes" }],
   },
 ] as const;
 
@@ -143,6 +189,7 @@ export const REVERSE_REGISTRAR_ABI = [
     inputs: [{ name: "name", type: "string" }],
     outputs: [{ type: "bytes32" }],
   },
+  // L1-style setNameForAddr (4 params)
   {
     name: "setNameForAddr",
     type: "function",
@@ -154,6 +201,56 @@ export const REVERSE_REGISTRAR_ABI = [
       { name: "name", type: "string" },
     ],
     outputs: [{ type: "bytes32" }],
+  },
+] as const;
+
+// L2 Reverse Registrar ABI (ENSIP-19 - uses 2 params instead of 4)
+export const L2_REVERSE_REGISTRAR_ABI = [
+  {
+    name: "node",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "addr", type: "address" }],
+    outputs: [{ type: "bytes32" }],
+  },
+  {
+    name: "setName",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "name", type: "string" }],
+    outputs: [{ type: "bytes32" }],
+  },
+  // L2-style setNameForAddr (2 params) - ENSIP-19
+  {
+    name: "setNameForAddr",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "addr", type: "address" },
+      { name: "name", type: "string" },
+    ],
+    outputs: [{ type: "bytes32" }],
+  },
+  // L1-style setNameForAddr (4 params) - used by Base Sepolia
+  {
+    name: "setNameForAddr",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "addr", type: "address" },
+      { name: "owner", type: "address" },
+      { name: "resolver", type: "address" },
+      { name: "name", type: "string" },
+    ],
+    outputs: [{ type: "bytes32" }],
+  },
+  // Read primary name for an address
+  {
+    name: "nameForAddr",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "addr", type: "address" }],
+    outputs: [{ type: "string" }],
   },
 ] as const;
 
@@ -557,5 +654,228 @@ export function buildResolverData(
   }
 
   return data;
+}
+
+// ============================================================================
+// Name Contract Utilities (for naming smart contracts)
+// ============================================================================
+
+/**
+ * Check if the signer owns the parent domain
+ */
+export async function checkParentOwnership(
+  parentNode: `0x${string}`,
+  network?: string
+): Promise<boolean> {
+  const wallet = await getWalletClient(network);
+  if (!wallet) {
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+  }
+
+  const signerAddress = wallet.account.address;
+  const ownerAddress = await getOwner(parentNode, network);
+
+  return ownerAddress?.toLowerCase() === signerAddress.toLowerCase();
+}
+
+/**
+ * Get resolver from parent node with fallback to public resolver (ENSIP-10)
+ */
+export async function getResolverFromParent(
+  parentNode: `0x${string}`,
+  network?: string
+): Promise<Address> {
+  const config = getNetworkConfig(network);
+  const parentResolver = await getResolver(parentNode, network);
+
+  // ENSIP-10: If parent has no resolver, use public resolver
+  return parentResolver || config.resolver;
+}
+
+/**
+ * Create a subname under a parent domain
+ * Uses Registry.setSubnodeRecord which is free if you own the parent
+ */
+export async function createSubname(
+  parentNode: `0x${string}`,
+  labelHashValue: `0x${string}`,
+  network?: string
+): Promise<`0x${string}` | null> {
+  const config = getNetworkConfig(network);
+  const wallet = await getWalletClient(network);
+  const client = getPublicClient(network);
+
+  if (!wallet) {
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+  }
+
+  const signerAddress = wallet.account.address;
+
+  // Calculate subname node
+  const subnameNode = keccak256(
+    encodePacked(["bytes32", "bytes32"], [parentNode, labelHashValue])
+  ) as `0x${string}`;
+
+  // Check if subname already exists
+  const existingOwner = await getOwner(subnameNode, network);
+
+  // If exists and owned by signer, skip (idempotent)
+  if (existingOwner && existingOwner.toLowerCase() === signerAddress.toLowerCase()) {
+    return null; // Already owned by signer
+  }
+
+  // If exists and owned by different address, throw error
+  if (existingOwner && existingOwner !== "0x0000000000000000000000000000000000000000") {
+    throw new Error(
+      `Subname already exists and is owned by ${existingOwner}. ` +
+      `You cannot overwrite a subname owned by another address.`
+    );
+  }
+
+  // Get resolver from parent (ENSIP-10)
+  const resolver = await getResolverFromParent(parentNode, network);
+
+  // Create subname via Registry
+  const txHash = await wallet.writeContract({
+    address: config.registry,
+    abi: REGISTRY_ABI,
+    functionName: "setSubnodeRecord",
+    args: [parentNode, labelHashValue, signerAddress, resolver, 0n],
+  });
+
+  // Wait for confirmation
+  await client.waitForTransactionReceipt({
+    hash: txHash,
+    confirmations: 2,
+  });
+
+  return txHash;
+}
+
+/**
+ * Set address record with chain-specific coin type (ENSIP-19)
+ * For L2 chains, the address is encoded as bytes
+ */
+export async function setAddressRecordWithCoinType(
+  node: `0x${string}`,
+  address: Address,
+  coinType: bigint,
+  resolverAddress: Address,
+  network?: string
+): Promise<`0x${string}` | null> {
+  const wallet = await getWalletClient(network);
+  const client = getPublicClient(network);
+
+  if (!wallet) {
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+  }
+
+  // Encode address as 20 bytes using encodePacked
+  // This is what the resolver expects for L2 coin types
+  const encodedAddress = encodePacked(["address"], [address]);
+
+  // Check if address record already matches (idempotent)
+  try {
+    const existingAddrBytes = await client.readContract({
+      address: resolverAddress,
+      abi: RESOLVER_ABI,
+      functionName: "addr",
+      args: [node, coinType],
+    }) as `0x${string}`;
+
+    // Compare the properly encoded bytes - both should be 20 bytes (42 chars with 0x prefix)
+    if (existingAddrBytes &&
+        existingAddrBytes.length === 42 &&
+        existingAddrBytes.toLowerCase() === encodedAddress.toLowerCase()) {
+      return null; // Already set correctly
+    }
+  } catch {
+    // Couldn't read, proceed with setting
+  }
+
+  const txHash = await wallet.writeContract({
+    address: resolverAddress,
+    abi: RESOLVER_ABI,
+    functionName: "setAddr",
+    args: [node, coinType, encodedAddress],
+  });
+
+  // Wait for confirmation
+  await client.waitForTransactionReceipt({
+    hash: txHash,
+    confirmations: 2,
+  });
+
+  return txHash;
+}
+
+/**
+ * Set reverse resolution using L2-style interface (2 params)
+ * This is for naming contracts on Base (ENSIP-19)
+ */
+export async function setReverseResolutionL2(
+  contractAddress: Address,
+  name: string,
+  network?: string
+): Promise<`0x${string}` | null> {
+  const config = getNetworkConfig(network);
+  const wallet = await getWalletClient(network);
+  const client = getPublicClient(network);
+
+  if (!wallet) {
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+  }
+
+  // Check if primary name already matches (idempotent)
+  try {
+    const existingName = await client.readContract({
+      address: config.reverseRegistrar,
+      abi: L2_REVERSE_REGISTRAR_ABI,
+      functionName: "nameForAddr",
+      args: [contractAddress],
+    }) as string;
+
+    if (existingName && existingName.toLowerCase() === name.toLowerCase()) {
+      return null; // Already set correctly
+    }
+  } catch {
+    // Couldn't read, proceed with setting
+  }
+
+  // Get the contract's owner (required for authorization)
+  const ownerAddress = await client.readContract({
+    address: contractAddress,
+    abi: [{ name: "owner", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }],
+    functionName: "owner",
+  }) as Address;
+
+  // Use L1-style setNameForAddr with 4 params (addr, owner, resolver, name)
+  // Base Sepolia's ReverseRegistrar requires this signature
+  const txHash = await wallet.writeContract({
+    address: config.reverseRegistrar,
+    abi: L2_REVERSE_REGISTRAR_ABI,
+    functionName: "setNameForAddr",
+    args: [contractAddress, ownerAddress, config.resolver, name],
+  });
+
+  // Wait for confirmation
+  await client.waitForTransactionReceipt({
+    hash: txHash,
+    confirmations: 2,
+  });
+
+  return txHash;
+}
+
+/**
+ * Calculate subname node from parent node and label hash
+ */
+export function calculateSubnameNode(
+  parentNode: `0x${string}`,
+  labelHashValue: `0x${string}`
+): `0x${string}` {
+  return keccak256(
+    encodePacked(["bytes32", "bytes32"], [parentNode, labelHashValue])
+  ) as `0x${string}`;
 }
 

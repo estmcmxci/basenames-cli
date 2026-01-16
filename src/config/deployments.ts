@@ -68,6 +68,11 @@ export const BASENAMES_DEPLOYMENTS: Record<string, NetworkConfig> = {
 // Default to Base Sepolia
 export const DEFAULT_NETWORK = "baseSepolia";
 
+// Coin types for Base networks (ENSIP-19)
+// These are derived from chainId using the formula: 0x80000000 | chainId
+export const BASE_MAINNET_COIN_TYPE = 2147492101n; // 0x80000000 | 8453
+export const BASE_SEPOLIA_COIN_TYPE = 2147568180n; // 0x80000000 | 84532
+
 export function getNetworkConfig(network?: string): NetworkConfig {
   const net = network || process.env.BASENAMES_NETWORK || DEFAULT_NETWORK;
   const config = BASENAMES_DEPLOYMENTS[net];
@@ -75,5 +80,20 @@ export function getNetworkConfig(network?: string): NetworkConfig {
     throw new Error(`Unknown network: ${net}. Available: ${Object.keys(BASENAMES_DEPLOYMENTS).join(", ")}`);
   }
   return config;
+}
+
+/**
+ * Get the coin type for a network (ENSIP-19)
+ * Base networks use chain-specific coin types for L2 resolution
+ */
+export function getCoinType(network?: string): bigint {
+  const config = getNetworkConfig(network);
+  if (config.chainId === 8453) {
+    return BASE_MAINNET_COIN_TYPE;
+  } else if (config.chainId === 84532) {
+    return BASE_SEPOLIA_COIN_TYPE;
+  }
+  // Default to 60 for ETH (coin type for Ethereum mainnet)
+  return 60n;
 }
 

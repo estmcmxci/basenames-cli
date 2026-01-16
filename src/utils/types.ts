@@ -82,3 +82,12 @@ export type RegistrationResult = {
   expiryDate: Date;
 };
 
+export type NameContractOptions = {
+  contractAddress: string;
+  name: string;
+  parent?: string;
+  noReverse?: boolean;
+  checkCompatibility?: boolean;
+  network?: string;
+};
+

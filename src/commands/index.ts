@@ -7,4 +7,6 @@ export { register } from "./register";
 export { setTxt, setAddress, setPrimary } from "./edit";
 export { getNamehash, getLabelHash, getResolverAddress, getDeployments } from "./utils";
 export { verify } from "./verify";
+export { nameContract } from "./name";
+
 
