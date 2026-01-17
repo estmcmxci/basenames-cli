@@ -6,6 +6,7 @@ A CLI for managing Basenames on Base (L2)
 ## Features
 
 - **Full Registration Flow** — Register basenames directly from the command line with availability checks, price quotes, and anti-frontrunning protection
+- **Ledger Hardware Wallet Support** — Sign transactions securely with your Ledger device instead of storing private keys
 - **Smart Contract Naming** — Name your smart contracts with subnames under your basename, with full forward and reverse resolution support
 - **Name Discovery** — List all basenames owned by any address via ENSNode indexing (see note on indexing gaps)
 - **Record Verification** — Verify that all onchain records are correctly configured
@@ -89,7 +90,7 @@ basenames resolve myname -n base
 ### Environment Variables
 
 ```bash
-# Private key for write operations (required for register/edit commands)
+# Private key for write operations (required unless using --ledger)
 export BASENAMES_PRIVATE_KEY="0x..."
 
 # Network-specific RPC URLs (recommended)
@@ -101,6 +102,50 @@ export BASE_RPC_URL_BASE="https://base.drpc.org"
 2. Generic URL (`BASE_RPC_URL`)
 3. Default from config (network-specific default)
 
+## Ledger Hardware Wallet
+
+All write commands support Ledger hardware wallet signing via the `--ledger` flag. This is the recommended approach for security-sensitive operations.
+
+### Setup
+
+1. Connect your Ledger device via USB
+2. Unlock it (enter PIN)
+3. Open the **Ethereum app**
+4. Enable "Blind signing" in Ethereum app settings (Settings > Blind signing > Enable)
+
+### Usage
+
+```bash
+# Register with Ledger
+basenames register --ledger myname
+
+# Use a specific account index (default: 0)
+basenames register --ledger --account-index 2 myname
+
+# Edit records with Ledger
+basenames edit txt --ledger myname description "My basename"
+basenames edit primary --ledger myname
+
+# Name a contract with Ledger
+basenames name --ledger 0x1234...5678 vault --parent myname.basetest.eth
+```
+
+### Supported Commands
+
+| Command | Ledger Support |
+|---------|----------------|
+| `register` | ✅ `--ledger` |
+| `edit txt` | ✅ `--ledger` |
+| `edit address` | ✅ `--ledger` |
+| `edit primary` | ✅ `--ledger` |
+| `name` | ✅ `--ledger` |
+
+### Why Use Ledger?
+
+- **Private keys never leave the device** — Your keys are stored securely on the Ledger hardware
+- **Physical confirmation** — Every transaction must be approved on the device screen
+- **No environment variables** — No need to store private keys in `BASENAMES_PRIVATE_KEY`
+
 ## Registration & Discovery
 
 ### `register`
@@ -110,6 +155,9 @@ Register a new basename with a complete flow: availability check, price calculat
 ```bash
 # Register a basename for 1 year
 basenames register coolname
+
+# Register with Ledger hardware wallet
+basenames register --ledger coolname
 
 # Register for multiple years
 basenames register coolname --years 2
@@ -167,6 +215,9 @@ basenames name <contract-address> <label> --parent <your-basename>
 
 # Example: Name contract as "vault.myname.basetest.eth"
 basenames name 0x1234...5678 vault --parent myname.basetest.eth
+
+# Use Ledger for signing
+basenames name --ledger 0x1234...5678 vault --parent myname.basetest.eth
 
 # Skip reverse resolution (forward only)
 basenames name 0x1234...5678 vault --parent myname.basetest.eth --no-reverse
@@ -294,13 +345,17 @@ basenames deployments
 
 ## Edit Commands
 
-Edit commands require setting the `BASENAMES_PRIVATE_KEY` environment variable.
+Edit commands require either `BASENAMES_PRIVATE_KEY` environment variable or `--ledger` flag.
 
 ```bash
+# Option 1: Environment variable
 export BASENAMES_PRIVATE_KEY="0x..."
+
+# Option 2: Ledger hardware wallet (recommended)
+basenames edit txt --ledger myname description "Hello"
 ```
 
-> ⚠️ **Security Warning:** Never commit your private key or add it permanently to shell config files!
+> ⚠️ **Security Warning:** Never commit your private key or add it permanently to shell config files! Consider using `--ledger` instead.
 
 ### `edit txt`
 
@@ -309,6 +364,9 @@ Set or clear a text record.
 ```bash
 basenames edit txt myname com.github myusername
 basenames edit txt myname com.github null  # clear
+
+# With Ledger
+basenames edit txt --ledger myname com.github myusername
 ```
 
 **Standard text keys:** `avatar`, `description`, `display`, `email`, `url`, `com.github`, `com.twitter`, `com.discord`, `com.warpcast`, `org.telegram`
@@ -319,6 +377,9 @@ Set or clear an address record.
 
 ```bash
 basenames edit address myname ETH 0x1234...
+
+# With Ledger
+basenames edit address --ledger myname ETH 0x1234...
 ```
 
 ### `edit primary`
@@ -327,6 +388,9 @@ Set the primary basename for your address.
 
 ```bash
 basenames edit primary myname
+
+# With Ledger
+basenames edit primary --ledger myname
 ```
 
 ### `edit resolver`
