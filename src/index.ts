@@ -227,20 +227,36 @@ const register = command({
       short: "n",
       description: "Network to use (baseSepolia, base)",
     }),
+    ledger: flag({
+      long: "ledger",
+      short: "l",
+      description: "Use Ledger hardware wallet for signing",
+    }),
+    accountIndex: option({
+      type: optional(string),
+      long: "account-index",
+      description: "Ledger account index (default: 0)",
+    }),
   },
   handler: async (args) => {
     if (!args.name) {
       console.log("Usage: basenames register <name> [--owner <address>] [options]");
       console.log("\nOptions:");
-      console.log("  --owner, -o    Owner address (defaults to signer from BASENAMES_PRIVATE_KEY)");
-      console.log("  --address, -a  Address record to set");
-      console.log("  --duration, -d Duration (1y, 6m, 30d)");
-      console.log("  --txt, -t      Text record (key=value)");
-      console.log("  --primary, -p  Set as primary name");
-      console.log("  --network, -n  Network (baseSepolia, base)");
+      console.log("  --owner, -o       Owner address (defaults to signer from BASENAMES_PRIVATE_KEY)");
+      console.log("  --address, -a     Address record to set");
+      console.log("  --duration, -d    Duration (1y, 6m, 30d)");
+      console.log("  --txt, -t         Text record (key=value)");
+      console.log("  --primary, -p     Set as primary name");
+      console.log("  --network, -n     Network (baseSepolia, base)");
+      console.log("  --ledger, -l      Use Ledger hardware wallet");
+      console.log("  --account-index   Ledger account index (default: 0)");
       return;
     }
-    await registerCmd(args);
+    await registerCmd({
+      ...args,
+      useLedger: args.ledger,
+      accountIndex: args.accountIndex ? parseInt(args.accountIndex, 10) : 0,
+    });
   },
 });
 
@@ -302,6 +318,16 @@ const name = command({
       short: "n",
       description: "Network to use (baseSepolia, base)",
     }),
+    ledger: flag({
+      long: "ledger",
+      short: "l",
+      description: "Use Ledger hardware wallet for signing",
+    }),
+    accountIndex: option({
+      type: optional(string),
+      long: "account-index",
+      description: "Ledger account index (default: 0)",
+    }),
   },
   handler: async (args) => {
     if (!args.contractAddress || !args.nameArg) {
@@ -311,6 +337,8 @@ const name = command({
       console.log("  --no-reverse            Skip reverse resolution");
       console.log("  --check-compatibility   Check contract compatibility");
       console.log("  --network, -n           Network (baseSepolia, base)");
+      console.log("  --ledger, -l            Use Ledger hardware wallet");
+      console.log("  --account-index         Ledger account index (default: 0)");
       return;
     }
     await nameContractCmd({
@@ -320,6 +348,8 @@ const name = command({
       noReverse: args.noReverse,
       checkCompatibility: args.checkCompatibility,
       network: args.network,
+      useLedger: args.ledger,
+      accountIndex: args.accountIndex ? parseInt(args.accountIndex, 10) : 0,
     });
   },
 });
@@ -356,6 +386,16 @@ const editTxt = command({
       short: "n",
       description: "Network to use (baseSepolia, base)",
     }),
+    ledger: flag({
+      long: "ledger",
+      short: "l",
+      description: "Use Ledger hardware wallet for signing",
+    }),
+    accountIndex: option({
+      type: optional(string),
+      long: "account-index",
+      description: "Ledger account index (default: 0)",
+    }),
   },
   handler: async (args) => {
     if (!args.name || !args.key || args.value === undefined) {
@@ -368,6 +408,8 @@ const editTxt = command({
       value: args.value,
       resolverAddress: args.resolverAddress,
       network: args.network,
+      useLedger: args.ledger,
+      accountIndex: args.accountIndex ? parseInt(args.accountIndex, 10) : 0,
     });
   },
 });
@@ -396,6 +438,16 @@ const editAddress = command({
       short: "n",
       description: "Network to use (baseSepolia, base)",
     }),
+    ledger: flag({
+      long: "ledger",
+      short: "l",
+      description: "Use Ledger hardware wallet for signing",
+    }),
+    accountIndex: option({
+      type: optional(string),
+      long: "account-index",
+      description: "Ledger account index (default: 0)",
+    }),
   },
   handler: async (args) => {
     if (!args.name || !args.value) {
@@ -407,6 +459,8 @@ const editAddress = command({
       value: args.value,
       resolverAddress: args.resolverAddress,
       network: args.network,
+      useLedger: args.ledger,
+      accountIndex: args.accountIndex ? parseInt(args.accountIndex, 10) : 0,
     });
   },
 });
@@ -425,13 +479,28 @@ const editPrimary = command({
       short: "n",
       description: "Network to use (baseSepolia, base)",
     }),
+    ledger: flag({
+      long: "ledger",
+      short: "l",
+      description: "Use Ledger hardware wallet for signing",
+    }),
+    accountIndex: option({
+      type: optional(string),
+      long: "account-index",
+      description: "Ledger account index (default: 0)",
+    }),
   },
   handler: async (args) => {
     if (!args.name) {
       console.log("Usage: basenames edit primary <name>");
       return;
     }
-    await setPrimaryCmd({ name: args.name, network: args.network });
+    await setPrimaryCmd({
+      name: args.name,
+      network: args.network,
+      useLedger: args.ledger,
+      accountIndex: args.accountIndex ? parseInt(args.accountIndex, 10) : 0,
+    });
   },
 });
 

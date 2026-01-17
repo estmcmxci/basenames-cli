@@ -482,14 +482,16 @@ export async function registerBasename(
   durationSeconds: bigint,
   resolverData: `0x${string}`[],
   reverseRecord: boolean,
-  network?: string
+  network?: string,
+  useLedger?: boolean,
+  accountIndex?: number
 ): Promise<`0x${string}`> {
   const config = getNetworkConfig(network);
   const client = getPublicClient(network);
-  const wallet = await getWalletClient(network);
+  const wallet = await getWalletClient(network, useLedger, accountIndex);
 
   if (!wallet) {
-    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable or use --ledger flag.");
   }
 
   // Normalize the label name (ENS normalization)
@@ -537,13 +539,15 @@ export async function setTextRecordOnChain(
   key: string,
   value: string,
   resolverAddress?: Address,
-  network?: string
+  network?: string,
+  useLedger?: boolean,
+  accountIndex?: number
 ): Promise<`0x${string}`> {
   const config = getNetworkConfig(network);
-  const wallet = await getWalletClient(network);
+  const wallet = await getWalletClient(network, useLedger, accountIndex);
 
   if (!wallet) {
-    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable or use --ledger flag.");
   }
 
   const resolver = resolverAddress || config.resolver;
@@ -565,13 +569,15 @@ export async function setAddressRecordOnChain(
   node: `0x${string}`,
   address: Address,
   resolverAddress?: Address,
-  network?: string
+  network?: string,
+  useLedger?: boolean,
+  accountIndex?: number
 ): Promise<`0x${string}`> {
   const config = getNetworkConfig(network);
-  const wallet = await getWalletClient(network);
+  const wallet = await getWalletClient(network, useLedger, accountIndex);
 
   if (!wallet) {
-    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable or use --ledger flag.");
   }
 
   const resolver = resolverAddress || config.resolver;
@@ -592,13 +598,15 @@ export async function setAddressRecordOnChain(
  */
 export async function setPrimaryNameOnChain(
   name: string,
-  network?: string
+  network?: string,
+  useLedger?: boolean,
+  accountIndex?: number
 ): Promise<`0x${string}`> {
   const config = getNetworkConfig(network);
-  const wallet = await getWalletClient(network);
+  const wallet = await getWalletClient(network, useLedger, accountIndex);
 
   if (!wallet) {
-    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable or use --ledger flag.");
   }
 
   const signerAddress = wallet.account.address;
@@ -665,11 +673,13 @@ export function buildResolverData(
  */
 export async function checkParentOwnership(
   parentNode: `0x${string}`,
-  network?: string
+  network?: string,
+  useLedger?: boolean,
+  accountIndex?: number
 ): Promise<boolean> {
-  const wallet = await getWalletClient(network);
+  const wallet = await getWalletClient(network, useLedger, accountIndex);
   if (!wallet) {
-    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable or use --ledger flag.");
   }
 
   const signerAddress = wallet.account.address;
@@ -699,14 +709,16 @@ export async function getResolverFromParent(
 export async function createSubname(
   parentNode: `0x${string}`,
   labelHashValue: `0x${string}`,
-  network?: string
+  network?: string,
+  useLedger?: boolean,
+  accountIndex?: number
 ): Promise<`0x${string}` | null> {
   const config = getNetworkConfig(network);
-  const wallet = await getWalletClient(network);
+  const wallet = await getWalletClient(network, useLedger, accountIndex);
   const client = getPublicClient(network);
 
   if (!wallet) {
-    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable or use --ledger flag.");
   }
 
   const signerAddress = wallet.account.address;
@@ -761,13 +773,15 @@ export async function setAddressRecordWithCoinType(
   address: Address,
   coinType: bigint,
   resolverAddress: Address,
-  network?: string
+  network?: string,
+  useLedger?: boolean,
+  accountIndex?: number
 ): Promise<`0x${string}` | null> {
-  const wallet = await getWalletClient(network);
+  const wallet = await getWalletClient(network, useLedger, accountIndex);
   const client = getPublicClient(network);
 
   if (!wallet) {
-    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable or use --ledger flag.");
   }
 
   // Encode address as 20 bytes using encodePacked
@@ -816,14 +830,16 @@ export async function setAddressRecordWithCoinType(
 export async function setReverseResolutionL2(
   contractAddress: Address,
   name: string,
-  network?: string
+  network?: string,
+  useLedger?: boolean,
+  accountIndex?: number
 ): Promise<`0x${string}` | null> {
   const config = getNetworkConfig(network);
-  const wallet = await getWalletClient(network);
+  const wallet = await getWalletClient(network, useLedger, accountIndex);
   const client = getPublicClient(network);
 
   if (!wallet) {
-    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable.");
+    throw new Error("Wallet not configured. Set BASENAMES_PRIVATE_KEY environment variable or use --ledger flag.");
   }
 
   // Check if primary name already matches (idempotent)

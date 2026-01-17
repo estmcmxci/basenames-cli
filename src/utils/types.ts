@@ -1,5 +1,13 @@
 import type { Address } from "viem";
 
+/**
+ * Ledger wallet options for write operations
+ */
+export type LedgerOptions = {
+  useLedger?: boolean;
+  accountIndex?: number;
+};
+
 export type ResolveOptions = {
   input: string;
   txt?: string;
@@ -28,7 +36,7 @@ export type RegisterOptions = {
   txt?: string[];
   primary?: boolean;
   network?: string;
-};
+} & LedgerOptions;
 
 export type EditTxtOptions = {
   name: string;
@@ -36,20 +44,20 @@ export type EditTxtOptions = {
   value: string;
   resolverAddress?: string;
   network?: string;
-};
+} & LedgerOptions;
 
 export type EditAddressOptions = {
   name: string;
   value: string;
   resolverAddress?: string;
   network?: string;
-};
+} & LedgerOptions;
 
 export type EditPrimaryOptions = {
   name: string;
   address?: string;
   network?: string;
-};
+} & LedgerOptions;
 
 export type ListOptions = {
   address: string;
@@ -89,5 +97,5 @@ export type NameContractOptions = {
   noReverse?: boolean;
   checkCompatibility?: boolean;
   network?: string;
-};
+} & LedgerOptions;
 

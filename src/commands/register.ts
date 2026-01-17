@@ -1,6 +1,6 @@
 /**
  * Register Command
- * 
+ *
  * Register a new basename with optional records.
  */
 
@@ -15,8 +15,10 @@ import {
   registerBasename,
   buildResolverData,
   getSignerAddress,
+  getSignerAddressAsync,
   getPublicClient,
   getNetworkConfig,
+  closeLedger,
   type RegisterOptions,
 } from "../utils";
 
@@ -58,34 +60,55 @@ function parseTextRecords(txtArgs: string[]): Record<string, string> {
  * Register a new basename
  */
 export async function register(options: RegisterOptions) {
-  const { name, owner, address, duration, txt, primary } = options;
+  const {
+    name,
+    owner,
+    address,
+    duration,
+    txt,
+    primary,
+    useLedger,
+    accountIndex,
+  } = options;
   const config = getNetworkConfig(options.network);
 
-  // Validate signer
-  const signerAddress = getSignerAddress();
-  if (!signerAddress) {
-    console.error(colors.red("Error: BASENAMES_PRIVATE_KEY not set"));
-    console.error(colors.yellow("Set the environment variable to register names"));
-    return;
-  }
-
-  // Use signer address as owner if not provided
-  const ownerAddress = owner || signerAddress;
-
-  // Validate owner address
-  if (!isAddress(ownerAddress)) {
-    console.error(colors.red("Invalid owner address"));
-    return;
-  }
-
-  // Validate address if provided
-  const addressToSet = address || ownerAddress;
-  if (!isAddress(addressToSet)) {
-    console.error(colors.red("Invalid address"));
-    return;
-  }
-
   try {
+    // Get signer address
+    let signerAddress: `0x${string}` | null;
+
+    if (useLedger) {
+      console.log(colors.blue("Connecting to Ledger..."));
+      signerAddress = await getSignerAddressAsync(true, accountIndex || 0);
+      console.log(colors.green("✓ Connected to Ledger"));
+      console.log(colors.dim(`  Address: ${signerAddress}`));
+      console.log(colors.dim(`  Account Index: ${accountIndex || 0}`));
+    } else {
+      signerAddress = getSignerAddress();
+      if (!signerAddress) {
+        console.error(colors.red("Error: BASENAMES_PRIVATE_KEY not set"));
+        console.error(
+          colors.yellow("Set the environment variable or use --ledger flag")
+        );
+        return;
+      }
+    }
+
+    // Use signer address as owner if not provided
+    const ownerAddress = owner || signerAddress;
+
+    // Validate owner address
+    if (!isAddress(ownerAddress)) {
+      console.error(colors.red("Invalid owner address"));
+      return;
+    }
+
+    // Validate address if provided
+    const addressToSet = address || ownerAddress;
+    if (!isAddress(addressToSet)) {
+      console.error(colors.red("Invalid address"));
+      return;
+    }
+
     const { label, fullName, node } = normalizeBasename(name, options.network);
 
     // Parse duration
@@ -99,6 +122,9 @@ export async function register(options: RegisterOptions) {
     console.log(`${colors.blue("Address:")}   ${addressToSet}`);
     console.log(`${colors.blue("Duration:")}  ${durationYears.toFixed(1)} year(s)`);
     console.log(`${colors.blue("Primary:")}   ${primary ? "Yes" : "No"}`);
+    if (useLedger) {
+      console.log(`${colors.blue("Signing:")}   Ledger (index ${accountIndex || 0})`);
+    }
 
     // Check availability
     startSpinner("Checking availability...");
@@ -134,6 +160,9 @@ export async function register(options: RegisterOptions) {
 
     // Register
     console.log(colors.blue("\nRegistering..."));
+    if (useLedger) {
+      console.log(colors.yellow("Please confirm the transaction on your Ledger device..."));
+    }
     startSpinner("Sending transaction...");
 
     const txHash = await registerBasename(
@@ -142,7 +171,9 @@ export async function register(options: RegisterOptions) {
       durationSeconds,
       resolverData,
       primary || false,
-      options.network
+      options.network,
+      useLedger,
+      accountIndex
     );
 
     stopSpinner();
@@ -160,13 +191,19 @@ export async function register(options: RegisterOptions) {
 
     if (receipt.status === "success") {
       console.log(colors.green(`✓ Confirmed in block ${receipt.blockNumber}`));
-      console.log(colors.green(`\n🎉 Successfully registered ${fullName}!\n`));
+      console.log(colors.green(`\n Successfully registered ${fullName}!\n`));
       console.log(`${colors.blue("Explorer:")} ${config.explorerUrl}/tx/${txHash}`);
 
       // Note: Additional record setting would go here
       if (Object.keys(textRecords).length > 0 || addressToSet !== ownerAddress) {
-        console.log(colors.yellow("\nNote: Additional records may need to be set separately."));
-        console.log(colors.yellow("Use 'basenames edit' commands to set text and address records."));
+        console.log(
+          colors.yellow("\nNote: Additional records may need to be set separately.")
+        );
+        console.log(
+          colors.yellow(
+            "Use 'basenames edit' commands to set text and address records."
+          )
+        );
       }
     } else {
       console.error(colors.red("✗ Transaction reverted"));
@@ -175,6 +212,9 @@ export async function register(options: RegisterOptions) {
     stopSpinner();
     const e = error as Error;
     console.error(colors.red(`Error registering: ${e.message}`));
+  } finally {
+    if (useLedger) {
+      await closeLedger();
+    }
   }
 }
-

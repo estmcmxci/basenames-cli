@@ -9,6 +9,7 @@ import { createPublicClient, createWalletClient, http, type PublicClient, type W
 import { baseSepolia, base } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { getNetworkConfig } from "../config/deployments";
+import { getLedgerAccount, getLedgerAddress, closeLedger } from "./ledger";
 
 // Chain mapping
 const CHAINS = {
@@ -44,28 +45,40 @@ export function createBasenamesPublicClient(network?: string): PublicClient {
 
 /**
  * Create a wallet client for write operations
- * Requires BASENAMES_PRIVATE_KEY environment variable
+ * Supports both private key (env var) and Ledger hardware wallet
  */
-export async function createBasenamesWalletClient(network?: string): Promise<WalletClient | null> {
-  const privateKey = process.env.BASENAMES_PRIVATE_KEY;
-
-  if (!privateKey) {
-    return null;
-  }
-
+export async function createBasenamesWalletClient(
+  network?: string,
+  useLedger = false,
+  accountIndex = 0
+): Promise<WalletClient | null> {
   const config = getNetworkConfig(network);
   const chain = config.chainId === 84532 ? baseSepolia : base;
-  
+
   // Support network-specific RPC URLs, fallback to generic BASE_RPC_URL, then default
   const net = network || process.env.BASENAMES_NETWORK || "baseSepolia";
-  const rpcUrl = 
+  const rpcUrl =
     (net === "base" && process.env.BASE_RPC_URL_BASE) ||
     (net === "baseSepolia" && process.env.BASE_RPC_URL_BASESEPOLIA) ||
     process.env.BASE_RPC_URL ||
     config.rpcUrl;
 
-  const account = privateKeyToAccount(privateKey as `0x${string}`);
+  if (useLedger) {
+    const account = await getLedgerAccount(accountIndex);
+    return createWalletClient({
+      account,
+      chain,
+      transport: http(rpcUrl),
+    });
+  }
 
+  // Existing private key flow
+  const privateKey = process.env.BASENAMES_PRIVATE_KEY;
+  if (!privateKey) {
+    return null;
+  }
+
+  const account = privateKeyToAccount(privateKey as `0x${string}`);
   return createWalletClient({
     account,
     chain,
@@ -98,9 +111,19 @@ export function getPublicClient(network?: string): PublicClient {
   return _publicClients.get(net)!;
 }
 
-export async function getWalletClient(network?: string): Promise<WalletClient | null> {
+export async function getWalletClient(
+  network?: string,
+  useLedger = false,
+  accountIndex = 0
+): Promise<WalletClient | null> {
   const net = network || process.env.BASENAMES_NETWORK || "baseSepolia";
-  
+
+  // For Ledger, always create fresh client (no caching)
+  if (useLedger) {
+    return await createBasenamesWalletClient(net, true, accountIndex);
+  }
+
+  // For private key, use cached client
   if (!_walletClients.has(net)) {
     // Always pass the resolved network name, not the original parameter
     const client = await createBasenamesWalletClient(net);
@@ -112,4 +135,20 @@ export async function getWalletClient(network?: string): Promise<WalletClient | 
   }
   return _walletClients.get(net) || null;
 }
+
+/**
+ * Get signer address (async version for Ledger support)
+ */
+export async function getSignerAddressAsync(
+  useLedger = false,
+  accountIndex = 0
+): Promise<`0x${string}` | null> {
+  if (useLedger) {
+    return await getLedgerAddress(accountIndex);
+  }
+  return getSignerAddress();
+}
+
+// Re-export closeLedger for cleanup
+export { closeLedger };
 
