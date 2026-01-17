@@ -8,7 +8,7 @@
 import type { Address } from "viem";
 import { encodeFunctionData, keccak256, encodePacked } from "viem";
 import { normalize } from "viem/ens";
-import { getNetworkConfig } from "../config/deployments";
+import { getNetworkConfig, getCoinType } from "../config/deployments";
 import { getPublicClient, getWalletClient } from "./viem";
 import { calculateBasenameNode } from "./node";
 
@@ -382,6 +382,7 @@ export async function getOwner(node: `0x${string}`, network?: string): Promise<A
 
 /**
  * Get address record from resolver
+ * Checks both the default ETH address slot and the L2 coin type slot
  */
 export async function getAddressRecord(
   resolverAddress: Address,
@@ -390,6 +391,7 @@ export async function getAddressRecord(
 ): Promise<Address | null> {
   const client = getPublicClient(network);
 
+  // First, try the default ETH address slot
   try {
     const addr = await client.readContract({
       address: resolverAddress,
@@ -398,13 +400,36 @@ export async function getAddressRecord(
       args: [node],
     });
 
-    if (addr === "0x0000000000000000000000000000000000000000") {
-      return null;
+    if (addr && addr !== "0x0000000000000000000000000000000000000000") {
+      return addr as Address;
     }
-    return addr as Address;
   } catch {
-    return null;
+    // Continue to try L2 coin type
   }
+
+  // If no ETH address, try the L2 coin type (ENSIP-19)
+  try {
+    const coinType = getCoinType(network);
+    const addrBytes = await client.readContract({
+      address: resolverAddress,
+      abi: RESOLVER_ABI,
+      functionName: "addr",
+      args: [node, coinType],
+    });
+
+    // addrBytes is returned as bytes, need to convert to address
+    if (addrBytes && addrBytes !== "0x" && addrBytes.length >= 42) {
+      // The bytes should be a 20-byte address
+      const addrHex = addrBytes.slice(0, 42) as Address;
+      if (addrHex !== "0x0000000000000000000000000000000000000000") {
+        return addrHex;
+      }
+    }
+  } catch {
+    // No L2 address either
+  }
+
+  return null;
 }
 
 /**

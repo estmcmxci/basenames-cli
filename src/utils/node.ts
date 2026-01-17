@@ -47,33 +47,46 @@ export function calculateBasenameNode(label: string, network?: string): `0x${str
 }
 
 /**
- * Extract the label from a full basename
+ * Extract the label(s) from a full basename
  * e.g., "vitalik.basetest.eth" -> "vitalik"
+ * e.g., "owned.estmcmxci.basetest.eth" -> "owned.estmcmxci"
  * e.g., "vitalik" -> "vitalik"
  */
 export function extractLabel(fullName: string, network?: string): string {
   const config = getNetworkConfig(network);
   const parentSuffix = `.${config.parentDomain}`;
-  
+
   // Remove parent domain suffix if present
   let name = fullName;
   if (name.toLowerCase().endsWith(parentSuffix.toLowerCase())) {
     name = name.slice(0, -parentSuffix.length);
   }
-  
-  // Get the first label (in case of subnames like "sub.vitalik")
-  const parts = name.split(".");
-  return parts[0];
+
+  // Return the full label path (supports subnames)
+  return name;
 }
 
 /**
- * Get the full basename from a label
- * e.g., "vitalik" -> "vitalik.basetest.eth"
+ * Check if a name is a subname (has multiple labels before the parent domain)
+ * e.g., "owned.estmcmxci.basetest.eth" -> true
+ * e.g., "vitalik.basetest.eth" -> false
  */
-export function getFullBasename(label: string, network?: string): string {
+export function isSubname(input: string, network?: string): boolean {
+  const label = extractLabel(input, network);
+  return label.includes(".");
+}
+
+/**
+ * Get the full basename from a label or label path
+ * e.g., "vitalik" -> "vitalik.basetest.eth"
+ * e.g., "owned.estmcmxci" -> "owned.estmcmxci.basetest.eth"
+ */
+export function getFullBasename(labelPath: string, network?: string): string {
   const config = getNetworkConfig(network);
-  const normalizedLabel = normalize(label);
-  return `${normalizedLabel}.${config.parentDomain}`;
+  // Normalize each label in the path separately
+  const parts = labelPath.split(".");
+  const normalizedParts = parts.map((part) => normalize(part));
+  return `${normalizedParts.join(".")}.${config.parentDomain}`;
 }
 
 /**
@@ -87,18 +100,29 @@ export function isFullBasename(name: string, network?: string): boolean {
 /**
  * Normalize and validate a basename input
  * Returns the normalized label and full name
+ *
+ * For top-level basenames (e.g., "vitalik.basetest.eth"), uses Basenames algorithm.
+ * For subnames (e.g., "owned.estmcmxci.basetest.eth"), uses standard ENS namehash.
  */
 export function normalizeBasename(input: string, network?: string): {
   label: string;
   fullName: string;
   node: `0x${string}`;
 } {
-  const label = extractLabel(input, network);
-  const normalizedLabel = normalize(label);
-  const fullName = getFullBasename(normalizedLabel, network);
-  const node = calculateBasenameNode(normalizedLabel, network);
-  
-  return { label: normalizedLabel, fullName, node };
+  const labelPath = extractLabel(input, network);
+  const fullName = getFullBasename(labelPath, network);
+
+  // For subnames, use standard ENS namehash
+  // For top-level basenames, use the Basenames algorithm
+  let node: `0x${string}`;
+  if (isSubname(input, network)) {
+    node = namehash(fullName) as `0x${string}`;
+  } else {
+    const normalizedLabel = normalize(labelPath);
+    node = calculateBasenameNode(normalizedLabel, network);
+  }
+
+  return { label: labelPath, fullName, node };
 }
 
 
